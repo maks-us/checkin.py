@@ -4,6 +4,7 @@ import time
 import datetime
 import sys
 import json
+import re
 
 
 DB = os.path.expanduser('~/hours.json')
@@ -27,32 +28,42 @@ def get_time(t):
             dt = datetime.datetime.strptime(t, "%d.%m.%Y-%H:%M")
         return int(time.mktime(dt.timetuple()))
 
+def convert_argv(argv, result = {}):
+		type = argv[0]
+		selected_time = None
+		message = result.get('message', None)
+		if len(argv) == 1:
+				result.update({type: get_time(None), 'message': message})
+				return result
 
-def checkin(when_or_message=None, message=None):
+		time_format = re.compile("^[0-9]{1,2}:[0-9]{2}$")
+		datetime_format = re.compile("^[0-9]{1,2}\.[0-9]{2}\.[0-9]{4}\-[0-9]{1,2}:[0-9]{2}$")
+		if time_format.match(argv[1]) or datetime_format.match(argv[1]):
+				selected_time = get_time(argv[1])
+
+		if len(argv) == 2 and selected_time is None:
+				message = argv[1] or message
+
+		if len(argv) == 3:
+				message = argv[2] or message
+
+		if selected_time is None:
+				selected_time = get_time(None)
+
+		result.update({type: selected_time, 'message': message})
+		return result
+
+def checkin(argv):
     if db:
         last_checkin = db[-1]
         assert 'out' in last_checkin, "Already checked in"
-    try:
-        get_time(when_or_message)
-    except:
-        message = when_or_message
-        when_or_message = None
-    db.append({'in': get_time(when_or_message), 'message': message})
+    db.append(convert_argv(argv))
 
-
-def checkout(when_or_message=None, message=None):
+def checkout(argv):
     last_checkin = db[-1]
     assert 'in' in last_checkin, "Not yet checked in"
     assert 'out' not in last_checkin, "Already checked out"
-    if message:
-        last_checkin['message'] = message
-    try:
-        get_time(when_or_message)
-    except:
-        last_checkin['message'] = when_or_message
-        when_or_message = None
-    last_checkin['out'] = get_time(when_or_message)
-
+    convert_argv(argv, last_checkin)
 
 def nextmonth(m):
     if m == 12:
@@ -125,7 +136,7 @@ def save_db():
 
 def main():
     if len(sys.argv) > 1:
-        {'in': checkin, 'out': checkout}[sys.argv[1]](*sys.argv[2:])
+        {'in': checkin, 'out': checkout}[sys.argv[1]](sys.argv[1:])
     save_db()
     print open(DB_HUMAN).read()
 
